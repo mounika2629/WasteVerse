@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Smart Waste Management Digital Twin</title>
+
+<!-- TensorFlow.js and MobileNet for AI waste detection -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@latest"></script>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    min-height: 100vh;
+    color: #23412c;
+    background: linear-gradient(
+        135deg,
+        #e9f8e8,
+        #f5fbe9,
+        #d9efd5,
+        #f3f9df
+    );
+    overflow-x: hidden;
+}
+
+/* Falling leaves background across all three pages */
+.leaf-layer {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+}
+
+.falling-leaf {
+    position: absolute;
+    top: -12%;
+    left: var(--left);
+    font-size: var(--size);
+    opacity: 0.75;
+    animation: leafFall var(--duration) linear var(--delay) infinite;
+    will-change: transform;
+}
+
+@keyframes leafFall {
+    0% {
+        transform: translate3d(0, -10vh, 0) rotate(0deg);
+    }
+    25% {
+        transform: translate3d(35px, 25vh, 0) rotate(100deg);
+    }
+    50% {
+        transform: translate3d(-30px, 50vh, 0) rotate(220deg);
+    }
+    75% {
+        transform: translate3d(40px, 75vh, 0) rotate(310deg);
+    }
+    100% {
+        transform: translate3d(-20px, 115vh, 0) rotate(450deg);
+    }
+}
+
+/* Keep the app above the animated background */
+header, main, footer {
+    position: relative;
+    z-index: 1;
+}
+
+header {
+    background: rgba(255, 255, 255, 0.82);
+    padding: 18px 12px;
+    text-align: center;
+    box-shadow: 0 3px 12px rgba(40, 90, 40, 0.10);
+}
+
+header h1 {
+    color: #246b3b;
+    font-size: clamp(23px, 4vw, 34px);
+    margin-bottom: 8px;
+}
+
+header p {
+    color: #56765a;
+}
+
+nav {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+nav button, .primary-btn {
+    background: #3c9657;
+    color: white;
+    border: none;
+    padding: 12px 19px;
+    border-radius: 25px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: 0.25s;
+}
+
+nav button:hover, .primary-btn:hover {
+    background: #267441;
+    transform: translateY(-2px);
+}
+
+main {
+    max-width: 1100px;
+    margin: auto;
+    padding: 30px 18px;
+}
+
+.page {
+    display: none;
+    animation: pageAppear 0.5s ease;
+}
+
+.page.active {
+    display: block;
+}
+
+@keyframes pageAppear {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.hero {
+    text-align: center;
+    padding: 55px 20px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(255,255,255,0.8);
+    border-radius: 25px;
+    box-shadow: 0 8px 25px rgba(50, 100, 50, 0.10);
+}
+
+.hero h2 {
+    color: #246b3b;
+    font-size: clamp(28px, 5vw, 43px);
+    margin-bottom: 18px;
+}
+
+.hero p {
+    font-size: 18px;
+    line-height: 1.7;
+    max-width: 750px;
+    margin: 0 auto 25px;
+}
+
+.nature {
+    font-size: 45px;
+    margin: 18px 0;
+    letter-spacing: 8px;
+}
+
+.section-title {
+    text-align: center;
+    color: #246b3b;
+    margin-bottom: 25px;
+    font-size: 30px;
+}
+
+.card {
+    background: rgba(255,255,255,0.86);
+    padding: 24px;
+    border-radius: 20px;
+    box-shadow: 0 5px 20px rgba(50, 100, 50, 0.09);
+    margin-bottom: 20px;
+    border: 1px solid rgba(255,255,255,0.9);
+}
+
+.card h3 {
+    color: #267441;
+    margin-bottom: 15px;
+}
+
+.center {
+    text-align: center;
+}
+
+input[type="file"] {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    margin: 20px auto;
+    padding: 12px;
+    border: 2px dashed #82bb8b;
+    border-radius: 12px;
+    background: #f7fff5;
+}
+
+#preview {
+    display: none;
+    max-width: 280px;
+    max-height: 280px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 15px;
+    margin: 20px auto;
+    box-shadow: 0 4px 15px #00000018;
+}
+
+#result {
+    margin-top: 20px;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+}
+
+.bin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 20px;
+}
+
+.bin-card {
+    background: rgba(255,255,255,0.88);
+    border-radius: 18px;
+    padding: 22px;
+    text-align: center;
+    box-shadow: 0 5px 16px rgba(50, 100, 50, 0.09);
+}
+
+.bin-icon {
+    font-size: 42px;
+    margin-bottom: 10px;
+}
+
+.bin-card h3 {
+    margin-bottom: 15px;
+    color: #286d3c;
+}
+
+.progress-track {
+    background: #e1eee0;
+    height: 15px;
+    border-radius: 20px;
+    overflow: hidden;
+    margin: 15px 0;
+}
+
+.progress-fill {
+    height: 100%;
+    border-radius: 20px;
+    transition: width 1s ease;
+}
+
+.low {
+    background: #62b96f;
+}
+
+.medium {
+    background: #e4b84e;
+}
+
+.high {
+    background: #e86e61;
+}
+
+.status {
+    font-weight: bold;
+    margin-top: 8px;
+}
+
+.notice {
+    background: #fff6d8;
+    color: #795b16;
+    padding: 12px;
+    border-radius: 10px;
+    margin-top: 15px;
+    line-height: 1.5;
+}
+
+footer {
+    text-align: center;
+    padding: 20px;
+    color: #58735a;
+}
+
+@media (max-width: 600px) {
+    main {
+        padding: 20px 12px;
+    }
+
+    .hero {
+        padding: 35px 15px;
+    }
+
+    nav button {
+        padding: 10px 13px;
+        font-size: 14px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .falling-leaf {
+        animation: none;
+        display: none;
+    }
+
+    .page {
+        animation: none;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<!-- Animated leaves remain visible on every page -->
+<div class="leaf-layer" aria-hidden="true">
+    <span class="falling-leaf" style="--left:5%;--size:25px;--duration:12s;--delay:-2s;">🍃</span>
+    <span class="falling-leaf" style="--left:15%;--size:20px;--duration:16s;--delay:-9s;">🌿</span>
+    <span class="falling-leaf" style="--left:25%;--size:28px;--duration:14s;--delay:-5s;">🍂</span>
+    <span class="falling-leaf" style="--left:38%;--size:22px;--duration:18s;--delay:-12s;">🍃</span>
+    <span class="falling-leaf" style="--left:50%;--size:30px;--duration:13s;--delay:-4s;">🌿</span>
+    <span class="falling-leaf" style="--left:62%;--size:24px;--duration:17s;--delay:-10s;">🍂</span>
+    <span class="falling-leaf" style="--left:74%;--size:26px;--duration:15s;--delay:-7s;">🍃</span>
+    <span class="falling-leaf" style="--left:85%;--size:20px;--duration:19s;--delay:-14s;">🌿</span>
+    <span class="falling-leaf" style="--left:95%;--size:29px;--duration:14s;--delay:-6s;">🍂</span>
+    <span class="falling-leaf" style="--left:32%;--size:18px;--duration:20s;--delay:-16s;">🍃</span>
+    <span class="falling-leaf" style="--left:68%;--size:23px;--duration:16s;--delay:-11s;">🌿</span>
+</div>
+
+<header>
+    <h1>🌍 Smart Waste Management Digital Twin</h1>
+    <p>Smart technology for a cleaner and greener future</p>
+
+    <nav>
+        <button onclick="showPage('home')">🏡 Home</button>
+        <button onclick="showPage('detection')">🤖 AI Waste Detection</button>
+        <button onclick="showPage('dashboard')">📊 Bin Dashboard</button>
+    </nav>
+</header>
+
+<main>
+
+    <!-- PAGE 1: WELCOME -->
+    <section id="home" class="page active">
+        <div class="hero">
+            <div class="nature">🌳 🌿 🍃 🌱 🌳</div>
+
+            <h2>Welcome to Smart Waste Management</h2>
+
+            <p>
+                Discover a smarter way to manage waste using artificial
+                intelligence and digital monitoring. Identify waste,
+                monitor bin levels, and help build a cleaner environment.
+            </p>
+
+            <button class="primary-btn" onclick="showPage('detection')">
+                Get Started →
+            </button>
+
+            <div class="nature">🌼 🌱 🌳 🌿 🌼</div>
+
+            <p>
+                ♻️ Reduce waste • Reuse resources • Recycle for tomorrow
+            </p>
+        </div>
+    </section>
+
+    <!-- PAGE 2: AI WASTE DETECTION -->
+    <section id="detection" class="page">
+        <h2 class="section-title">🤖 AI Waste Detection</h2>
+
+        <div class="card center">
+            <h3>Upload a Waste Image</h3>
+
+            <p>
+                Select an image of an item to receive AI-based image
+                classification and a suggested waste category.
+            </p>
+
+            <input
+                type="file"
+                id="imageInput"
+                accept="image/*"
+                onchange="previewImage(event)"
+            >
+
+            <img id="preview" alt="Selected waste image preview">
+
+            <button class="primary-btn" id="analyzeBtn" onclick="analyzeImage()">
+                Analyze Image
+            </button>
+
+            <div id="result" aria-live="polite">
+                Your analysis result will appear here.
+            </div>
+
+            <div class="notice">
+                Note: Image classification is a suggestion, not a guaranteed
+                waste-material identification. Please verify the item before
+                disposing of it.
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>♻️ Waste Categories</h3>
+            <p>🍌 Organic waste — food scraps and fruit peels</p>
+            <p>📄 Paper waste — paper and cardboard</p>
+            <p>🥤 Plastic waste — bottles and plastic packaging</p>
+            <p>🥫 Metal waste — cans and metal containers</p>
+            <p>🍾 Glass waste — bottles and glass containers</p>
+            <p>🔋 E-waste — batteries and electronic equipment</p>
+        </div>
+    </section>
+
+    <!-- PAGE 3: BIN DASHBOARD -->
+    <section id="dashboard" class="page">
+        <h2 class="section-title">📊 Smart Bin Dashboard</h2>
+
+        <div class="card center">
+            <h3>Waste Bin Monitoring</h3>
+            <p>
+                Example fill levels for smart waste bins.
+                These values are sample data, not live sensor readings.
+            </p>
+        </div>
+
+        <div class="bin-grid" id="binGrid"></div>
+
+        <div class="card">
+            <h3>🌱 Why Smart Waste Management?</h3>
+            <p>✅ Helps identify bins that may need collection.</p>
+            <p>✅ Encourages proper waste segregation.</p>
+            <p>✅ Supports cleaner streets and communities.</p>
+            <p>✅ Helps improve waste collection planning.</p>
+        </div>
+    </section>
+
+</main>
+
+<footer>
+    <p>🌿 Smart Waste Management Digital Twin | Keep the Earth Green 🌍</p>
+</footer>
+
+<script>
+/* Switch between the three pages */
+function showPage(pageId) {
+    document.querySelectorAll(".page").forEach(page => {
+        page.classList.remove("active");
+    });
+
+    document.getElementById(pageId).classList.add("active");
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+}
+
+/* Preview the selected image */
+function previewImage(event) {
+    const file = event.target.files[0];
+    const preview = document.getElementById("preview");
+    const result = document.getElementById("result");
+
+    if (!file) {
+        preview.style.display = "none";
+        return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+        result.textContent = "Please select a valid image file.";
+        preview.style.display = "none";
+        return;
+    }
+
+    preview.src = URL.createObjectURL(file);
+    preview.style.display = "block";
+    result.textContent = "Image selected. Click Analyze Image to continue.";
+}
+
+/* Load MobileNet only when needed */
+let modelPromise = null;
+
+function loadModel() {
+    if (!modelPromise) {
+        modelPromise = mobilenet.load();
+    }
+    return modelPromise;
+}
+
+/* AI image classification */
+async function analyzeImage() {
+    const preview = document.getElementById("preview");
+    const result = document.getElementById("result");
+    const button = document.getElementById("analyzeBtn");
+
+    if (!preview.src || preview.style.display === "none") {
+        result.textContent = "Please upload an image first.";
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Analyzing...";
+    result.textContent = "Loading AI model and analyzing image. Please wait...";
+
+    try {
+        const model = await loadModel();
+        const predictions = await model.classify(preview);
+        const best = predictions[0];
+
+        if (!best) {
+            result.textContent = "No classification result was returned.";
+            return;
+        }
+
+        const label = best.className.toLowerCase();
+        const category = categorizeWaste(label);
+        const confidence = (best.probability * 100).toFixed(1);
+
+        result.innerHTML =
+            "<h3>Analysis Result</h3>" +
+            "<p><strong>Detected object:</strong> " +
+            escapeHTML(best.className) + "</p>" +
+            "<p><strong>Model confidence:</strong> " +
+            confidence + "%</p>" +
+            "<p><strong>Suggested category:</strong> " +
+            category.name + "</p>" +
+            "<p><strong>Suggested action:</strong> " +
+            category.advice + "</p>" +
+            "<p><small>Check local recycling rules and verify the material.</small></p>";
+
+    } catch (error) {
+        console.error(error);
+        result.textContent =
+            "Could not analyze the image. Check your internet connection " +
+            "and try again.";
+    } finally {
+        button.disabled = false;
+        button.textContent = "Analyze Image";
+    }
+}
+
+/* Map model labels to possible waste categories */
+function categorizeWaste(label) {
+    if (/banana|apple|orange|lemon|fruit|vegetable|food|broccoli|potato/.test(label)) {
+        return {
+            name: "Organic / Wet Waste",
+            advice: "Use the organic waste bin or compost if accepted locally."
+        };
+    }
+
+    if (/paper|carton|cardboard|newspaper|envelope|book/.test(label)) {
+        return {
+            name: "Paper Waste",
+            advice: "Keep clean and dry, then recycle where accepted."
+        };
+    }
+
+    if (/bottle|plastic|water jug|container|cup/.test(label)) {
+        return {
+            name: "Potential Plastic or Container Waste",
+            advice: "Check the material and recycling symbol before sorting."
+        };
+    }
+
+    if (/can opener|can|metal|steel|iron/.test(label)) {
+        return {
+            name: "Potential Metal Waste",
+            advice: "Confirm that it is metal and follow local recycling guidance."
+        };
+    }
+
+    if (/beer glass|wine bottle|vase|glass/.test(label)) {
+        return {
+            name: "Potential Glass Waste",
+            advice: "Confirm the item is recyclable glass; broken glass may need special handling."
+        };
+    }
+
+    if (/battery|remote control|cellular telephone|computer|keyboard|mouse|monitor/.test(label)) {
+        return {
+            name: "Potential Electronic Waste",
+            advice: "Take electronics and batteries to an authorized e-waste collection point."
+        };
+    }
+
+    return {
+        name: "Uncertain — Verify Before Sorting",
+        advice: "The AI model identifies general objects, not waste materials reliably. Inspect the item and check local waste rules."
+    };
+}
+
+/* Safely display model-generated text */
+function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+    })[char]);
+}
+
+/* Sample bin levels for the dashboard */
+const bins = [
+    { name: "Wet Waste", icon: "🍃", fill: 45 },
+    { name: "Dry Waste", icon: "📦", fill: 72 },
+    { name: "Plastic Waste", icon: "🥤", fill: 88 },
+    { name: "Paper Waste", icon: "📄", fill: 30 },
+    { name: "E-Waste", icon: "🔋", fill: 95 }
+];
+
+function renderBins() {
+    const binGrid = document.getElementById("binGrid");
+
+    binGrid.innerHTML = bins.map(bin => {
+        let levelClass = "low";
+        let status = "Normal";
+
+        if (bin.fill >= 80) {
+            levelClass = "high";
+            status = "Collection Required";
+        } else if (bin.fill >= 60) {
+            levelClass = "medium";
+            status = "Filling Up";
+        }
+
+        return `
+            <div class="bin-card">
+                <div class="bin-icon">${bin.icon}</div>
+                <h3>${bin.name}</h3>
+                <p>${bin.fill}% Full</p>
+                <div class="progress-track">
+                    <div
+                        class="progress-fill ${levelClass}"
+                        style="width:${bin.fill}%"
+                    ></div>
+                </div>
+                <p class="status">${status}</p>
+            </div>
+        `;
+    }).join("");
+}
+
+renderBins();
+</script>
+
+</body>
+</html>
